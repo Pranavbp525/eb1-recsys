@@ -1,0 +1,6 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+      "main": "./api/graph.py:create_eb1a_agent_dev"
+    }
+  } 
