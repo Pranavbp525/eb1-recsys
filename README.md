@@ -21,28 +21,20 @@ PERPLEXITY_API_KEY="YOUR_PERPLEXITY_API_KEY"
 OPENROUTER_API_KEY="YOUR_OPENROUTER_API_KEY"
 ```
 
-### Step 2: Build the Docker Image
+### Step 2:Run Uvicorn
 
-Open your terminal in the project's root directory and run the following command to build the Docker image. This will take a few minutes as it downloads the base image and installs dependencies.
-
+Open your terminal and navigate to api dir
 ```bash
-docker build -t eb1a-rec-api .
+cd api
 ```
 
-### Step 3: Run the Docker Container
-
-Once the image is built, you can run it as a container with this command:
-
+Then run :
 ```bash
-docker run -d -p 8000:8000 --env-file .env --name eb1a-api eb1a-rec-api
+uvicorn run api:app --reload
 ```
 
-*   `-d` runs the container in detached mode (in the background).
-*   `-p 8000:8000` maps port 8000 on your local machine to port 8000 inside the container.
-*   `--env-file .env` securely passes your API keys from the `.env` file into the container.
-*   `--name eb1a-api` gives the running container a memorable name.
+Your api is running on port 8000
 
-The API is now running!
 
 ### Step 4: Test the API
 
