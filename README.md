@@ -10,6 +10,7 @@ This is the easiest way to get the API running.
 
 *   Docker installed on your machine.
 *   An internet connection.
+*   Install requirements using pip install -r requirements.txt
 
 ### Step 1: Create the Environment File
 
