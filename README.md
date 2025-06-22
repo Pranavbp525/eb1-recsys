@@ -96,8 +96,3 @@ If successful, the API will return a `200 OK` status and a JSON array of `Lawyer
 ```
 
 
-### Managing the Container
-
-*   **To see the logs:** `docker logs eb1a-api`
-*   **To stop the container:** `docker stop eb1a-api`
-*   **To remove the container:** `docker rm eb1a-api` 
