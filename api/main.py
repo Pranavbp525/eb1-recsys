@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from models import UserProfile
 from graph import create_eb1a_agent
 import asyncio
