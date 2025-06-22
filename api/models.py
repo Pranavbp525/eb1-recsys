@@ -7,8 +7,9 @@ from langgraph.graph.message import add_messages
 class LawyerProfile(BaseModel):
     name: str
     firm: str
+    website: str
+    years_experience: int
     # location: str
-    # years_experience: int
     # eb1a_cases_handled: int
     # success_rate: float
     # specializations: List[str]
@@ -16,7 +17,6 @@ class LawyerProfile(BaseModel):
     # fee_range: Dict[str, float]
     # client_industries: List[str]
     # notable_achievements: List[str]
-    contact_info: Dict[str, str]
 
 class UserProfile(BaseModel):
     name: str
@@ -36,8 +36,9 @@ class UserProfile(BaseModel):
 class AgentState(TypedDict):
     user_profile: UserProfile
     search_queries: List[str]
-    raw_search_results: List[dict]
+    raw_search_results: List[Dict]
     lawyer_profiles: List[LawyerProfile]
-    recommendations: List[dict]
+    compatibility_scores: Dict[str, float]
+    recommendations: List[Dict]
     reasoning: str
-    messages: List[str]
+    messages: Annotated[List[BaseMessage], add_messages]  # LangChain messages with reducer

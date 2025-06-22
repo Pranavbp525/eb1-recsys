@@ -6,6 +6,7 @@ import json
 import os
 import re
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 
@@ -49,14 +50,14 @@ async def generate_search_queries(state: AgentState) -> AgentState:
     - Key Achievements: {', '.join(user_profile.achievements[:3])}
 
     Generate 5 specific search queries for Perplexity API that will find:
-    1. EB-1A lawyers with high success rates (90%+)
-    2. Lawyers experienced with {user_profile.nationality} nationals
-    3. Lawyers specializing in {user_profile.industry}
-    4. Location-specific lawyers if applicable
-    5. Lawyers within the budget range
+    1. EB-1A lawyers with high success rates (90%+) and their experience level
+    2. Lawyers experienced with {user_profile.nationality} nationals and their years practicing
+    3. Lawyers specializing in {user_profile.industry} with their firm websites
+    4. Location-specific lawyers if applicable with their professional background
+    5. Lawyers within the budget range and their experience
 
     Format your response as a JSON array of search queries.
-    Focus on finding lawyers with verifiable success rates and specific EB-1A experience.
+    Focus on finding lawyers with verifiable success rates, years of experience, and official websites.
     """
 
     response = await openrouter_llm.ainvoke([
@@ -75,11 +76,11 @@ async def generate_search_queries(state: AgentState) -> AgentState:
     else:
         # Fallback queries
         queries = [
-            f"EB-1A immigration lawyers 90% success rate {user_profile.industry}",
-            f"Top EB-1A attorneys {user_profile.nationality} extraordinary ability visa",
-            f"Best EB-1A lawyers high approval rate {user_profile.location_preference or 'USA'}",
-            f"Immigration lawyers EB-1A {user_profile.occupation} cases statistics",
-            "EB-1A visa attorneys success rate data verified results"
+            f"EB-1A immigration lawyers 90% success rate {user_profile.industry} years experience website",
+            f"Top EB-1A attorneys {user_profile.nationality} extraordinary ability visa firm website experience",
+            f"Best EB-1A lawyers high approval rate {user_profile.location_preference or 'USA'} professional background",
+            f"Immigration lawyers EB-1A {user_profile.occupation} cases statistics years practicing",
+            "EB-1A visa attorneys success rate data verified results official websites experience"
         ]
 
     state["search_queries"] = queries
@@ -88,19 +89,20 @@ async def generate_search_queries(state: AgentState) -> AgentState:
 
 # Node 2: Execute Perplexity Search
 async def search_with_perplexity(state: AgentState) -> AgentState:
-    """Execute searches using Perplexity API."""
+    """Execute searches using Perplexity API in parallel."""
 
-    all_results = []
-
-    for query in state["search_queries"]:
+    async def search_single_query(query: str) -> dict:
+        """Execute a single search query."""
         perplexity_prompt = f"""
         Search for information about EB-1A immigration lawyers with the following query:
         "{query}"
 
         Focus on finding:
-        - Lawyer names and firms
-        - Contact information
-        - Client testimonials
+        - Lawyer names and their law firms
+        - Years of experience practicing immigration law
+        - Official website URLs of the lawyer, not the firm's website
+        - Professional background and qualifications
+        - Client testimonials mentioning experience level
 
         Provide detailed, factual information with sources when available.
         """
@@ -111,23 +113,28 @@ async def search_with_perplexity(state: AgentState) -> AgentState:
                 HumanMessage(content=perplexity_prompt)
             ])
 
-            all_results.append({
+            return {
                 "query": query,
                 "results": response.content
-            })
+            }
 
         except Exception as e:
-            state["messages"].append(f"Error searching with Perplexity: {str(e)}")
-            # Fallback to regular LLM with mock data
-            all_results.append({
+            state["messages"].append(f"Error searching with Perplexity for query '{query}': {str(e)}")
+            # Fallback to mock data
+            return {
                 "query": query,
                 "results": f"Mock search results for: {query}"
-            })
+            }
+
+    # Create tasks for all queries
+    search_tasks = [search_single_query(query) for query in state["search_queries"]]
+    
+    # Execute all searches in parallel
+    all_results = await asyncio.gather(*search_tasks)
 
     state["raw_search_results"] = all_results
-    state["messages"].append(f"Completed {len(all_results)} searches")
+    state["messages"].append(f"Completed {len(all_results)} searches in parallel")
     return state
-
 # Node 3: Extract and Generate Lawyer Profiles
 async def extract_lawyer_profiles(state: AgentState) -> AgentState:
     """Extract structured lawyer profiles from search results."""
@@ -142,18 +149,26 @@ async def extract_lawyer_profiles(state: AgentState) -> AgentState:
 
     For each lawyer found, extract:
     - Full name
-    - Law firm
-    - Contact information (email, phone, website)
+    - Law firm name
+    - Official website URL of the lawyer, not the firm's website(must be a valid URL)
+    - Years of experience (estimate if exact number not found based on career timeline)
 
     IMPORTANT RULES:
     1. Verify the lawyer specializes in EB-1A specifically, not just general immigration.
-    2. Only include lawyers where you can find contact information.
+    2. Only include lawyers where you can find or reasonably estimate their experience level.
+    3. Website must be a valid URL (starting with http:// or https://) and must be the lawyer's website, not the firm's website
+    4. If years of experience is not explicitly stated, estimate based on:
+       - When they started practicing law
+       - When they joined their current firm
+       - Career milestones mentioned
+    5. Be conservative with experience estimates (round down rather than up)
 
     Return the profiles as a JSON array. Each profile should match this structure:
     {{
         "name": "string",
-        "firm": "string",
-        "contact_info": {{"email": "string", "phone": "string", "website": "string"}}
+        "firm": "string", 
+        "website": "string (valid URL)",
+        "years_experience": number (integer)
     }}
     """
 
@@ -169,8 +184,18 @@ async def extract_lawyer_profiles(state: AgentState) -> AgentState:
     if json_match:
         try:
             profiles_data = json.loads(json_match.group())
-            lawyer_profiles = [LawyerProfile(**profile) for profile in profiles_data]
-        except (json.JSONDecodeError, TypeError) as e:
+            lawyer_profiles = []
+            
+            for profile in profiles_data:
+                # Validate the profile has required fields
+                if all(key in profile for key in ['name', 'firm', 'website', 'years_experience']):
+                    # Ensure website has proper format
+                    if not profile['website'].startswith(('http://', 'https://')):
+                        profile['website'] = 'https://' + profile['website']
+                    
+                    lawyer_profiles.append(LawyerProfile(**profile))
+                    
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
             state["messages"].append(f"Error parsing lawyer profiles: {str(e)}. No profiles extracted.")
             lawyer_profiles = []
     else:
@@ -197,11 +222,14 @@ async def generate_recommendations(state: AgentState) -> AgentState:
     Lawyer Profiles:
     {json.dumps([lawyer.model_dump() for lawyer in state["lawyer_profiles"]], indent=2)}
 
-    Based on the available information, recommend the TOP 2 lawyers for this user.
+    Based on the available information, recommend the TOP 3 lawyers for this user.
+    Consider their years of experience and how it aligns with the user's needs.
 
     Your response MUST be a single, valid JSON array. Each object in the array represents one
     lawyer recommendation and MUST conform to the exact structure below. Do not add any
     introductory text or explanations outside of the JSON structure.
+
+    If a lawyer profile does not have a website, do not include them in the recommendations.
 
     ```json
     [
@@ -209,14 +237,11 @@ async def generate_recommendations(state: AgentState) -> AgentState:
         "lawyer": {{
           "name": "Lawyer's Full Name",
           "firm": "Name of the Law Firm",
-          "contact_info": {{
-            "email": "lawyer@example.com",
-            "phone": "123-456-7890",
-            "website": "[www.lawfirm.com](https://www.lawfirm.com)"
-          }}
+          "website": "https://www.lawfirm.com",
+          "years_experience": 15
         }},
-        "reason": "A brief statement on why they are a good starting point for the user.",
-        "next_steps": "Specific, actionable next steps the user should take."
+        "reason": "A brief statement on why they are a good match, considering their experience level and expertise.",
+        "rating": "A rating out of 100 for the lawyer's expertise and experience. It should be based on the ranks (top 1 lawyer should have higher ratting than the 2nd and 3rd, similarly for the 2nd and 3rd)"
       }}
     ]
     ```
@@ -235,7 +260,8 @@ async def generate_recommendations(state: AgentState) -> AgentState:
         recommendations = json.loads(json_match.group())
     else:
         # Create default recommendations
-        sorted_lawyers = state["lawyer_profiles"][:2]
+        print("No recommendations found, creating default recommendations")
+        sorted_lawyers = sorted(state["lawyer_profiles"], key=lambda x: x.years_experience, reverse=True)
 
         recommendations = []
         for i, lawyer in enumerate(sorted_lawyers):
@@ -243,14 +269,11 @@ async def generate_recommendations(state: AgentState) -> AgentState:
                 "rank": i + 1,
                 "lawyer": lawyer.model_dump(),
                 "why_recommended": [
-                    f"Found profile for {lawyer.name} specializing in EB-1A cases.",
-                    "Contact information is available to start the process."
+                    f"{lawyer.name} from {lawyer.firm} has {lawyer.years_experience} years of experience in immigration law.",
+                    f"Specializes in EB-1A cases with extensive experience in the field.",
+                    f"Visit their website at {lawyer.website} for more information."
                 ],
-                "next_steps": [
-                    f"Schedule initial consultation via {lawyer.contact_info.get('email', 'their website')}",
-                    "Prepare your CV and list of achievements for discussion",
-                    "Inquire about their specific experience with cases like yours.",
-                ]
+                "rating": 100 - ((i+1) * 5)
             })
 
     state["recommendations"] = recommendations
@@ -259,7 +282,7 @@ async def generate_recommendations(state: AgentState) -> AgentState:
     reasoning_prompt = f"""
     Summarize why these lawyers were selected for the user in 2-3 sentences.
     User priorities: {user_profile.priority_factors}
-    Selected lawyers: {[r['lawyer']['name'] for r in recommendations]}
+    Selected lawyers: {[r['lawyer']['name'] + ' (' + str(r['lawyer']['years_experience']) + ' years experience)' for r in recommendations]}
     """
 
     reasoning_response = await openrouter_llm.ainvoke([HumanMessage(content=reasoning_prompt)])

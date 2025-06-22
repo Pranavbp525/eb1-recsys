@@ -41,7 +41,7 @@ async def get_recommendations(user_profile: UserProfile):
     # Extract just the lawyer profiles from the full output
     lawyer_profiles = [rec["lawyer"] for rec in full_output.get("recommendations", [])]
     
-    return lawyer_profiles
+    return full_output.get("recommendations", [])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

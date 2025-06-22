@@ -2,16 +2,14 @@
 
 This project provides a FastAPI-based API that recommends EB-1A immigration lawyers based on a user's profile. The recommendation engine is powered by LangGraph and uses AI models from Perplexity and OpenRouter.
 
-## Quickstart with Docker
-
-This is the easiest way to get the API running.
+## Quickstart
 
 ### Prerequisites
 
-*   Docker installed on your machine.
-*   An internet connection.
+*   Python 3.8+ installed on your machine
+*   An internet connection
 
-### Step 1: Create the Environment File
+### Step 1: Install Dependencies
 
 The application requires API keys for its AI services. Create a file named `.env` in the root of this project and add your keys like this:
 
@@ -91,20 +89,15 @@ If successful, the API will return a `200 OK` status and a JSON array of `Lawyer
 ```json
 [
   {
-    "name": "string",
-    "firm": "string",
-    "contact_info": {
-      "email": "string",
-      "phone": "string",
-      "website": "string"
-    }
+    "lawyer": {
+      "name": "string",
+      "firm": "string",
+      "website": "string",
+      "years_experience": "string"
+    },
+    "reason": "string",
+    "rating": int
   }
 ]
 ```
 
-
-### Managing the Container
-
-*   **To see the logs:** `docker logs eb1a-api`
-*   **To stop the container:** `docker stop eb1a-api`
-*   **To remove the container:** `docker rm eb1a-api` 

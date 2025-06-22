@@ -19,7 +19,8 @@ async def find_eb1a_lawyers(user_profile: UserProfile):
         "compatibility_scores": {},
         "recommendations": [],
         "reasoning": "",
-        "messages": []
+        "messages": [],
+        "num_recommendations": 3
     }
     
     # Create and run agent
@@ -60,7 +61,8 @@ if __name__ == "__main__":
         publications=45,
         citations=1200,
         awards=["Best Paper Award NeurIPS 2023", "Google Research Award 2022"],
-        priority_factors=["success_rate", "industry_expertise", "timeline"]
+        priority_factors=["success_rate", "industry_expertise", "timeline"],
+        num_recommendations=3
     )
     
     # Run the agent

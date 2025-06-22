@@ -22,7 +22,8 @@ user_profile = {
     "publications": 45,
     "citations": 1200,
     "awards": ["Best Paper Award NeurIPS 2023", "Google Research Award 2022"],
-    "priority_factors": ["success_rate", "industry_expertise", "timeline"]
+    "priority_factors": ["success_rate", "industry_expertise", "timeline"],
+    "num_recommendations": 3
 }
 
 # Set headers
